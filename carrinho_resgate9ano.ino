@@ -1,55 +1,102 @@
 #define CUSTOM_SETTINGS
 #define INCLUDE_GAMEPAD_MODULE
 #include <Dabble.h>
+#include <Servo.h>
 
 #define INT1 4
 #define INT2 5
 #define INT3 6
 #define INT4 7
+#define EXTRA_MOTOR_PIN 8
+#define SERVO_PIN 9
+
+bool motorLigado = false;
+bool botaoTrianguloAnterior = false;
+
+bool rampaAtivada = false;
+bool botaoQuadradoAnterior = false;
+
+Servo rampaServo;
+int anguloAtual = 0;  // Guarda a posição atual do servo
 
 void setup()
 {
-  // Inicializando a comunicação serial para depuração
-  Serial.begin(9600);  // Use uma taxa de 9600 baud, que é mais comum para comunicação com o Dabble
-  Dabble.begin(9600, 2, 3);  // Defina a comunicação com o módulo Dabble
+  Serial.begin(9600);
+  Dabble.begin(9600, 2, 3);
 
-  // Configura os pinos como saída para controle dos motores
   pinMode(INT1, OUTPUT);
   pinMode(INT2, OUTPUT);
   pinMode(INT3, OUTPUT);
   pinMode(INT4, OUTPUT);
+  pinMode(EXTRA_MOTOR_PIN, OUTPUT);
 
-  Stop();  // Inicializa o robô parado
+  digitalWrite(EXTRA_MOTOR_PIN, LOW);
+
+  rampaServo.attach(SERVO_PIN);
+  rampaServo.write(anguloAtual);
+
+  Stop();
 }
 
 void loop() {
-  // Processa as entradas do GamePad
   Dabble.processInput();
 
-  // Verifica se algum botão do GamePad foi pressionado
+  // Controle do robô
   if (GamePad.isUpPressed()) {
-    Serial.println("Movendo para frente");
     forward(); 
   }
   else if (GamePad.isDownPressed()) {
-    Serial.println("Movendo para trás");
     backward(); 
   }
   else if (GamePad.isLeftPressed()) {
-    Serial.println("Movendo para a esquerda");
     left(); 
   }
   else if (GamePad.isRightPressed()) {
-    Serial.println("Movendo para a direita");
     right(); 
   }
   else {
-    Serial.println("Parando");
-    Stop();  // Se nenhum botão foi pressionado, o robô para
+    Stop();
   }
+
+  // Controle do motor extra - botão Triângulo
+  bool botaoTrianguloAtual = GamePad.isTrianglePressed();
+  if (botaoTrianguloAtual && !botaoTrianguloAnterior) {
+    motorLigado = !motorLigado;
+    digitalWrite(EXTRA_MOTOR_PIN, motorLigado ? HIGH : LOW);
+    Serial.print("Motor extra ");
+    Serial.println(motorLigado ? "LIGADO" : "DESLIGADO");
+  }
+  botaoTrianguloAnterior = botaoTrianguloAtual;
+
+  // Controle do servo (rampa) com movimento suave - botão Quadrado
+  bool botaoQuadradoAtual = GamePad.isSquarePressed();
+  if (botaoQuadradoAtual && !botaoQuadradoAnterior) {
+    rampaAtivada = !rampaAtivada;
+    int anguloDestino = rampaAtivada ? 60 : 0;
+    moverServoSuavemente(anguloDestino);
+    Serial.print("Rampa ");
+    Serial.println(rampaAtivada ? "LEVANTADA (60°)" : "RECOLHIDA (0°)");
+  }
+  botaoQuadradoAnterior = botaoQuadradoAtual;
 }
 
-// Função para mover o robô para frente
+// Função para mover o servo suavemente até um ângulo
+void moverServoSuavemente(int destino) {
+  if (destino > anguloAtual) {
+    for (int ang = anguloAtual; ang <= destino; ang++) {
+      rampaServo.write(ang);
+      delay(15);  // Atraso para suavidade
+    }
+  } else {
+    for (int ang = anguloAtual; ang >= destino; ang--) {
+      rampaServo.write(ang);
+      delay(15);
+    }
+  }
+  anguloAtual = destino;  // Atualiza posição atual
+}
+
+// Funções de movimentação
 void forward() {
   digitalWrite(INT1, LOW);
   digitalWrite(INT2, HIGH);
@@ -57,7 +104,6 @@ void forward() {
   digitalWrite(INT4, LOW);
 }
 
-// Função para mover o robô para trás
 void backward() {
   digitalWrite(INT1, HIGH);
   digitalWrite(INT2, LOW);
@@ -65,7 +111,6 @@ void backward() {
   digitalWrite(INT4, HIGH);
 }
 
-// Função para mover o robô para a esquerda
 void left() {
   digitalWrite(INT1, HIGH);
   digitalWrite(INT2, LOW);
@@ -73,7 +118,6 @@ void left() {
   digitalWrite(INT4, LOW);    
 }
 
-// Função para mover o robô para a direita
 void right() {
   digitalWrite(INT1, LOW);
   digitalWrite(INT2, HIGH);
@@ -81,11 +125,9 @@ void right() {
   digitalWrite(INT4, HIGH);  
 }
 
-// Função para parar o robô
 void Stop() {
   digitalWrite(INT1, LOW);
   digitalWrite(INT2, LOW);
-
   digitalWrite(INT3, LOW);
   digitalWrite(INT4, LOW);  
 }
